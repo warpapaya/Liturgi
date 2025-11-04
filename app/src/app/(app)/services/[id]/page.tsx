@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import { DndProvider, useDrag, useDrop } from 'react-dnd'
+import { HTML5Backend } from 'react-dnd-html5-backend'
+import SongBrowserModal from '@/components/SongBrowserModal'
 
 interface ServiceItem {
   id: string
@@ -30,6 +33,7 @@ interface ServicePlan {
   name: string
   date: string
   campus: string | null
+  status: 'draft' | 'published' | 'archived'
   notes: string | null
   items: ServiceItem[]
   assignments: Assignment[]
@@ -44,6 +48,10 @@ export default function ServiceDetailPage() {
   const [error, setError] = useState('')
   const [showItemForm, setShowItemForm] = useState(false)
   const [showAssignmentForm, setShowAssignmentForm] = useState(false)
+  const [showTemplateForm, setShowTemplateForm] = useState(false)
+  const [showSongBrowser, setShowSongBrowser] = useState(false)
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+  const [bulkMode, setBulkMode] = useState(false)
 
   useEffect(() => {
     fetchService()
@@ -86,6 +94,101 @@ export default function ServiceDetailPage() {
     }
   }
 
+  const duplicateService = async () => {
+    if (!confirm('Duplicate this service plan? A copy will be created with the same items and assignments.')) return
+
+    try {
+      const res = await fetch(`/api/services/${params.id}/duplicate`, {
+        method: 'POST',
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to duplicate service')
+      }
+
+      const data = await res.json()
+      router.push(`/services/${data.servicePlan.id}`)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to duplicate service')
+    }
+  }
+
+  const updateStatus = async (newStatus: 'draft' | 'published' | 'archived') => {
+    try {
+      const res = await fetch(`/api/services/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update status')
+      }
+
+      fetchService()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update status')
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'published':
+        return 'bg-green-100 text-green-800 border-green-200'
+      case 'archived':
+        return 'bg-gray-100 text-gray-800 border-gray-200'
+      case 'draft':
+      default:
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+    }
+  }
+
+  const handlePrint = () => {
+    window.print()
+  }
+
+  const toggleItemSelection = (itemId: string) => {
+    const newSelection = new Set(selectedItems)
+    if (newSelection.has(itemId)) {
+      newSelection.delete(itemId)
+    } else {
+      newSelection.add(itemId)
+    }
+    setSelectedItems(newSelection)
+  }
+
+  const selectAllItems = () => {
+    if (service) {
+      setSelectedItems(new Set(service.items.map(item => item.id)))
+    }
+  }
+
+  const deselectAllItems = () => {
+    setSelectedItems(new Set())
+  }
+
+  const bulkDeleteItems = async () => {
+    if (selectedItems.size === 0) return
+    if (!confirm(`Delete ${selectedItems.size} selected item(s)?`)) return
+
+    try {
+      await Promise.all(
+        Array.from(selectedItems).map(itemId =>
+          fetch(`/api/services/${service?.id}/items/${itemId}`, {
+            method: 'DELETE',
+          })
+        )
+      )
+      setSelectedItems(new Set())
+      setBulkMode(false)
+      fetchService()
+    } catch (error) {
+      alert('Failed to delete some items')
+    }
+  }
+
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
@@ -121,23 +224,49 @@ export default function ServiceDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <Link href="/services" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
+    <DndProvider backend={HTML5Backend}>
+      <div className="space-y-6">
+        {/* Header */}
+        <div>
+        <Link href="/services" className="text-primary-600 hover:text-primary-700 text-sm font-medium print:hidden">
           ← Back to Services
         </Link>
         <div className="mt-4 flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">{service.name}</h1>
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-gray-900">{service.name}</h1>
+              <select
+                value={service.status}
+                onChange={(e) => updateStatus(e.target.value as any)}
+                className={`px-3 py-1 text-sm font-medium rounded-full border ${getStatusColor(service.status)} print:hidden`}
+              >
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="archived">Archived</option>
+              </select>
+              <span className={`hidden print:inline-block px-3 py-1 text-sm font-medium rounded-full border ${getStatusColor(service.status)}`}>
+                {service.status}
+              </span>
+            </div>
             <p className="mt-1 text-gray-500">
               {format(new Date(service.date), 'EEEE, MMMM d, yyyy • h:mm a')}
               {service.campus && ` • ${service.campus}`}
             </p>
           </div>
-          <button onClick={deleteService} className="btn-danger">
-            Delete Service
-          </button>
+          <div className="flex gap-2 print:hidden">
+            <button onClick={handlePrint} className="btn-secondary">
+              Print
+            </button>
+            <button onClick={() => setShowTemplateForm(true)} className="btn-secondary">
+              Save as Template
+            </button>
+            <button onClick={duplicateService} className="btn-secondary">
+              Duplicate
+            </button>
+            <button onClick={deleteService} className="btn-danger">
+              Delete
+            </button>
+          </div>
         </div>
         {service.notes && (
           <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -155,13 +284,62 @@ export default function ServiceDetailPage() {
               Total Duration: {formatDuration(service.totalDuration)}
             </p>
           </div>
-          <button
-            onClick={() => setShowItemForm(true)}
-            className="btn-primary"
-          >
-            Add Item
-          </button>
+          <div className="flex gap-2 print:hidden">
+            {service.items.length > 0 && (
+              <button
+                onClick={() => {
+                  setBulkMode(!bulkMode)
+                  setSelectedItems(new Set())
+                }}
+                className="btn-secondary"
+              >
+                {bulkMode ? 'Cancel Selection' : 'Select Multiple'}
+              </button>
+            )}
+            <button
+              onClick={() => setShowSongBrowser(true)}
+              className="btn-secondary"
+            >
+              Add from Library
+            </button>
+            <button
+              onClick={() => setShowItemForm(true)}
+              className="btn-primary"
+            >
+              Add Item
+            </button>
+          </div>
         </div>
+
+        {/* Bulk Actions Bar */}
+        {bulkMode && service.items.length > 0 && (
+          <div className="mb-4 p-4 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-gray-700">
+                {selectedItems.size} item(s) selected
+              </span>
+              <button
+                onClick={selectAllItems}
+                className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+              >
+                Select All
+              </button>
+              <button
+                onClick={deselectAllItems}
+                className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+              >
+                Deselect All
+              </button>
+            </div>
+            <button
+              onClick={bulkDeleteItems}
+              disabled={selectedItems.size === 0}
+              className="btn-danger disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Delete Selected
+            </button>
+          </div>
+        )}
 
         {service.items.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
@@ -170,24 +348,36 @@ export default function ServiceDetailPage() {
         ) : (
           <div className="space-y-2">
             {service.items.map((item, index) => (
-              <div
+              <DraggableServiceItemRow
                 key={item.id}
-                className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
-              >
-                <div className="text-2xl">{getItemIcon(item.type)}</div>
-                <div className="flex-1">
-                  <h3 className="font-medium text-gray-900">{item.title}</h3>
-                  {item.notes && (
-                    <p className="text-sm text-gray-500 mt-1">{item.notes}</p>
-                  )}
-                </div>
-                <div className="text-sm text-gray-500">
-                  {formatDuration(item.durationSec)}
-                </div>
-                <div className="text-xs text-gray-400 uppercase">
-                  {item.type}
-                </div>
-              </div>
+                item={item}
+                index={index}
+                serviceId={service.id}
+                bulkMode={bulkMode}
+                isSelected={selectedItems.has(item.id)}
+                onToggleSelect={() => toggleItemSelection(item.id)}
+                onUpdate={fetchService}
+                onMove={async (dragIndex, hoverIndex) => {
+                  if (dragIndex === hoverIndex) return
+
+                  const draggedItem = service.items[dragIndex]
+                  try {
+                    await fetch(`/api/services/${service.id}/items/reorder`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        itemId: draggedItem.id,
+                        newPosition: hoverIndex,
+                      }),
+                    })
+                    fetchService()
+                  } catch (error) {
+                    console.error('Failed to reorder items:', error)
+                  }
+                }}
+                formatDuration={formatDuration}
+                getItemIcon={getItemIcon}
+              />
             ))}
           </div>
         )}
@@ -212,7 +402,7 @@ export default function ServiceDetailPage() {
           <h2 className="text-xl font-semibold text-gray-900">Assignments</h2>
           <button
             onClick={() => setShowAssignmentForm(true)}
-            className="btn-primary"
+            className="btn-primary print:hidden"
           >
             Add Assignment
           </button>
@@ -225,24 +415,12 @@ export default function ServiceDetailPage() {
         ) : (
           <div className="space-y-2">
             {service.assignments.map((assignment) => (
-              <div
+              <AssignmentRow
                 key={assignment.id}
-                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
-              >
-                <div>
-                  <h3 className="font-medium text-gray-900">{assignment.role}</h3>
-                  <p className="text-sm text-gray-500">
-                    {assignment.person.firstName} {assignment.person.lastName}
-                  </p>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  assignment.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                  assignment.status === 'declined' ? 'bg-red-100 text-red-800' :
-                  'bg-yellow-100 text-yellow-800'
-                }`}>
-                  {assignment.status}
-                </span>
-              </div>
+                assignment={assignment}
+                serviceId={service.id}
+                onUpdate={fetchService}
+              />
             ))}
           </div>
         )}
@@ -259,7 +437,55 @@ export default function ServiceDetailPage() {
           />
         )}
       </div>
+
+      {/* Save as Template Form */}
+      {showTemplateForm && (
+        <SaveAsTemplateForm
+          serviceId={service.id}
+          serviceName={service.name}
+          onSuccess={() => {
+            setShowTemplateForm(false)
+            alert('Template created successfully!')
+          }}
+          onCancel={() => setShowTemplateForm(false)}
+        />
+      )}
+
+      {/* Song Browser Modal */}
+      {showSongBrowser && (
+        <SongBrowserModal
+          onSelect={async (song, arrangement) => {
+            try {
+              const res = await fetch(`/api/services/${service.id}/items`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'song',
+                  title: song.title,
+                  songId: song.id,
+                  key: arrangement?.key || null,
+                  durationSec: 300, // Default 5 minutes
+                  position: service.items.length,
+                  notes: arrangement ? `Arrangement: ${arrangement.name}` : null,
+                }),
+              })
+
+              if (!res.ok) {
+                const data = await res.json()
+                throw new Error(data.error || 'Failed to add song')
+              }
+
+              setShowSongBrowser(false)
+              fetchService()
+            } catch (err) {
+              alert(err instanceof Error ? err.message : 'Failed to add song')
+            }
+          }}
+          onCancel={() => setShowSongBrowser(false)}
+        />
+      )}
     </div>
+    </DndProvider>
   )
 }
 
@@ -509,5 +735,481 @@ function AddAssignmentForm({
         </button>
       </div>
     </form>
+  )
+}
+
+// Draggable Service Item Row Component
+function DraggableServiceItemRow({
+  item,
+  index,
+  serviceId,
+  bulkMode,
+  isSelected,
+  onToggleSelect,
+  onUpdate,
+  onMove,
+  formatDuration,
+  getItemIcon,
+}: {
+  item: ServiceItem
+  index: number
+  serviceId: string
+  bulkMode: boolean
+  isSelected: boolean
+  onToggleSelect: () => void
+  onUpdate: () => void
+  onMove: (dragIndex: number, hoverIndex: number) => void
+  formatDuration: (seconds: number) => string
+  getItemIcon: (type: string) => string
+}) {
+  const [{ isDragging }, drag] = useDrag({
+    type: 'SERVICE_ITEM',
+    item: { index },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  })
+
+  const [, drop] = useDrop({
+    accept: 'SERVICE_ITEM',
+    hover: (draggedItem: { index: number }) => {
+      if (draggedItem.index !== index) {
+        onMove(draggedItem.index, index)
+        draggedItem.index = index
+      }
+    },
+  })
+
+  return (
+    <div ref={(node) => drag(drop(node))} style={{ opacity: isDragging ? 0.5 : 1 }}>
+      <ServiceItemRow
+        item={item}
+        serviceId={serviceId}
+        bulkMode={bulkMode}
+        isSelected={isSelected}
+        onToggleSelect={onToggleSelect}
+        onUpdate={onUpdate}
+        formatDuration={formatDuration}
+        getItemIcon={getItemIcon}
+      />
+    </div>
+  )
+}
+
+// Service Item Row Component with inline editing
+function ServiceItemRow({
+  item,
+  serviceId,
+  bulkMode,
+  isSelected,
+  onToggleSelect,
+  onUpdate,
+  formatDuration,
+  getItemIcon,
+}: {
+  item: ServiceItem
+  serviceId: string
+  bulkMode: boolean
+  isSelected: boolean
+  onToggleSelect: () => void
+  onUpdate: () => void
+  formatDuration: (seconds: number) => string
+  getItemIcon: (type: string) => string
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [formData, setFormData] = useState({
+    type: item.type,
+    title: item.title,
+    durationSec: item.durationSec,
+    notes: item.notes || '',
+  })
+
+  const handleUpdate = async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      const res = await fetch(`/api/services/${serviceId}/items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          notes: formData.notes || null,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update item')
+      }
+
+      setIsEditing(false)
+      onUpdate()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update item')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!confirm(`Are you sure you want to delete "${item.title}"?`)) return
+
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/services/${serviceId}/items/${item.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete item')
+      }
+
+      onUpdate()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete item')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancel = () => {
+    setIsEditing(false)
+    setError('')
+    setFormData({
+      type: item.type,
+      title: item.title,
+      durationSec: item.durationSec,
+      notes: item.notes || '',
+    })
+  }
+
+  if (isEditing) {
+    return (
+      <div className="p-4 border-2 border-primary-300 rounded-lg bg-primary-50 space-y-3">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label text-sm">Type</label>
+            <select
+              className="input"
+              value={formData.type}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+            >
+              <option value="song">Song</option>
+              <option value="element">Element</option>
+              <option value="note">Note</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="label text-sm">Duration (minutes)</label>
+            <input
+              type="number"
+              className="input"
+              min="0"
+              value={Math.floor(formData.durationSec / 60)}
+              onChange={(e) => setFormData({ ...formData, durationSec: parseInt(e.target.value || '0') * 60 })}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="label text-sm">Title</label>
+          <input
+            type="text"
+            className="input"
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label className="label text-sm">Notes</label>
+          <textarea
+            className="input"
+            rows={2}
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          />
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={handleUpdate}
+            disabled={loading}
+            className="btn-primary text-sm px-3 py-1.5"
+          >
+            {loading ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            onClick={handleCancel}
+            disabled={loading}
+            className="btn-secondary text-sm px-3 py-1.5"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 group print:border-0 print:p-2 ${isSelected ? 'bg-primary-50 border-primary-400' : ''}`}>
+      {bulkMode && (
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggleSelect}
+          className="w-5 h-5 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+        />
+      )}
+      {!bulkMode && (
+        <div className="cursor-move text-gray-400 hover:text-gray-600 print:hidden" title="Drag to reorder">
+          ⠿
+        </div>
+      )}
+      <div className="text-2xl">{getItemIcon(item.type)}</div>
+      <div className="flex-1">
+        <h3 className="font-medium text-gray-900">{item.title}</h3>
+        {item.notes && (
+          <p className="text-sm text-gray-500 mt-1">{item.notes}</p>
+        )}
+      </div>
+      <div className="text-sm text-gray-500">
+        {formatDuration(item.durationSec)}
+      </div>
+      <div className="text-xs text-gray-400 uppercase print:hidden">
+        {item.type}
+      </div>
+      {!bulkMode && (
+        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity print:hidden">
+          <button
+            onClick={() => setIsEditing(true)}
+            className="text-primary-600 hover:text-primary-700 text-sm font-medium px-2 py-1"
+            title="Edit"
+          >
+            Edit
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={loading}
+            className="text-red-600 hover:text-red-700 text-sm font-medium px-2 py-1"
+            title="Delete"
+          >
+            {loading ? 'Deleting...' : 'Delete'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Assignment Row Component with status updates
+function AssignmentRow({
+  assignment,
+  serviceId,
+  onUpdate,
+}: {
+  assignment: Assignment
+  serviceId: string
+  onUpdate: () => void
+}) {
+  const [loading, setLoading] = useState(false)
+
+  const updateStatus = async (newStatus: 'pending' | 'accepted' | 'declined') => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/services/${serviceId}/assignments/${assignment.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update status')
+      }
+
+      onUpdate()
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to update status')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const deleteAssignment = async () => {
+    if (!confirm('Remove this assignment?')) return
+
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/services/${serviceId}/assignments/${assignment.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete assignment')
+      }
+
+      onUpdate()
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to delete assignment')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'accepted':
+        return 'bg-green-100 text-green-800'
+      case 'declined':
+        return 'bg-red-100 text-red-800'
+      default:
+        return 'bg-yellow-100 text-yellow-800'
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 group">
+      <div className="flex-1">
+        <h3 className="font-medium text-gray-900">{assignment.role}</h3>
+        <p className="text-sm text-gray-500">
+          {assignment.person.firstName} {assignment.person.lastName}
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <select
+          value={assignment.status}
+          onChange={(e) => updateStatus(e.target.value as any)}
+          disabled={loading}
+          className={`px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(assignment.status)} disabled:opacity-50`}
+        >
+          <option value="pending">Pending</option>
+          <option value="accepted">Accepted</option>
+          <option value="declined">Declined</option>
+        </select>
+        <button
+          onClick={deleteAssignment}
+          disabled={loading}
+          className="opacity-0 group-hover:opacity-100 text-red-600 hover:text-red-700 text-sm font-medium px-2 py-1 print:hidden"
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Save as Template Form Component
+function SaveAsTemplateForm({
+  serviceId,
+  serviceName,
+  onSuccess,
+  onCancel,
+}: {
+  serviceId: string
+  serviceName: string
+  onSuccess: () => void
+  onCancel: () => void
+}) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [formData, setFormData] = useState({
+    name: `${serviceName} Template`,
+    description: '',
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    try {
+      const res = await fetch(`/api/services/${serviceId}/create-template`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          description: formData.description || null,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create template')
+      }
+
+      onSuccess()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create template')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Save as Template</h2>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="template-name" className="label">
+              Template Name *
+            </label>
+            <input
+              type="text"
+              id="template-name"
+              className="input"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="template-description" className="label">
+              Description
+            </label>
+            <textarea
+              id="template-description"
+              className="input"
+              rows={3}
+              placeholder="Describe when to use this template..."
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            />
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button type="submit" disabled={loading} className="btn-primary flex-1">
+              {loading ? 'Creating...' : 'Create Template'}
+            </button>
+            <button type="button" onClick={onCancel} className="btn-secondary flex-1">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   )
 }

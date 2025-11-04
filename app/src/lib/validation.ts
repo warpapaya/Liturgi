@@ -35,6 +35,7 @@ export const createServicePlanSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   date: z.string().datetime('Invalid date'),
   campus: z.string().optional().nullable(),
+  status: z.enum(['draft', 'published', 'archived']).default('draft'),
   notes: z.string().optional().nullable(),
 })
 
