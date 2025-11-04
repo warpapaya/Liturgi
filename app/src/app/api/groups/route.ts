@@ -4,18 +4,42 @@ import { requireAuth } from '@/lib/auth'
 import { requirePermission, getOrgFilter } from '@/lib/rbac'
 import { createGroupSchema } from '@/lib/validation'
 
-// GET /api/groups - List groups
+// GET /api/groups - List groups with filtering
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth()
     requirePermission(user, 'groups:read')
 
+    // Parse query parameters for filtering
+    const { searchParams } = new URL(req.url)
+    const status = searchParams.get('status')
+    const category = searchParams.get('category')
+    const visibility = searchParams.get('visibility')
+    const campus = searchParams.get('campus')
+    const search = searchParams.get('search')
+
+    // Build where clause
+    const where: any = getOrgFilter(user)
+
+    if (status) where.status = status
+    if (category) where.category = category
+    if (visibility) where.visibility = visibility
+    if (campus) where.campus = campus
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ]
+    }
+
     const groups = await prisma.group.findMany({
-      where: getOrgFilter(user),
+      where,
       include: {
         _count: {
           select: {
             members: true,
+            meetings: true,
+            resources: true,
           },
         },
       },
