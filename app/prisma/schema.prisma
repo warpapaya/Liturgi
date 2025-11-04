@@ -1,0 +1,423 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  leader
+  member
+  viewer
+}
+
+enum Plan {
+  trial
+  basic
+  pro
+}
+
+enum PersonStatus {
+  active
+  inactive
+}
+
+enum ServiceItemType {
+  song
+  element
+  note
+}
+
+enum AssignmentStatus {
+  pending
+  accepted
+  declined
+}
+
+enum GroupMemberRole {
+  leader
+  member
+}
+
+enum NotificationType {
+  assignment_created
+  assignment_reminder
+  service_updated
+  conflict_detected
+}
+
+enum NotificationStatus {
+  pending
+  sent
+  failed
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  subdomain   String   @unique
+  plan        Plan     @default(trial)
+  planLimits  Json     // {people: 100, groups: 10, servicePlans: 10}
+  trialEndAt  DateTime?
+  logoUrl     String?
+  timezone    String   @default("America/New_York")
+  campus      String?  // Default campus
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users              User[]
+  sessions           Session[]
+  invites            Invite[]
+  people             Person[]
+  groups             Group[]
+  servicePlans       ServicePlan[]
+  serviceTemplates   ServiceTemplate[]
+  songs              Song[]
+  files              File[]
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+
+  @@map("organizations")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  orgId         String
+  email         String
+  passwordHash  String
+  role          Role      @default(member)
+  firstName     String?
+  lastName      String?
+  createdAt     DateTime  @default(now())
+  lastLoginAt   DateTime?
+
+  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sessions      Session[]
+  auditLogs     AuditLog[]
+  invitesSent   Invite[]     @relation("InvitesSent")
+
+  @@unique([orgId, email])
+  @@index([orgId])
+  @@map("users")
+}
+
+model Invite {
+  id         String    @id @default(cuid())
+  orgId      String
+  email      String
+  role       Role      @default(member)
+  invitedBy  String
+  code       String    @unique
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  inviter      User         @relation("InvitesSent", fields: [invitedBy], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([email])
+  @@index([code])
+  @@map("invites")
+}
+
+model Session {
+  id            String   @id @default(cuid())
+  orgId         String
+  userId        String
+  expiresAt     DateTime
+  ipFingerprint String?
+  createdAt     DateTime @default(now())
+
+  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Person {
+  id         String       @id @default(cuid())
+  orgId      String
+  firstName  String
+  lastName   String
+  email      String?
+  phone      String?
+  photoUrl   String?
+  tags       Json         @default("[]") // Array of strings
+  notes      String?      @db.Text
+  status     PersonStatus @default(active)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  organization       Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  groupMemberships   GroupMembership[]
+  serviceAssignments ServiceAssignment[]
+  availability       PersonAvailability[]
+
+  @@index([orgId])
+  @@index([orgId, status])
+  @@index([orgId, email])
+  @@map("people")
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  description String?  @db.Text
+  cadence     String?  // Free text: "Weekly on Wednesdays", "Bi-weekly", etc.
+  location    String?
+  isOpen      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  members      GroupMembership[]
+  comments     GroupComment[]
+
+  @@index([orgId])
+  @@map("groups")
+}
+
+model GroupMembership {
+  id        String          @id @default(cuid())
+  groupId   String
+  personId  String
+  role      GroupMemberRole @default(member)
+  createdAt DateTime        @default(now())
+
+  group  Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, personId])
+  @@index([groupId])
+  @@index([personId])
+  @@map("group_memberships")
+}
+
+model GroupComment {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String   // Not FK to avoid cascade issues if user deleted
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@map("group_comments")
+}
+
+model ServicePlan {
+  id         String   @id @default(cuid())
+  orgId      String
+  templateId String?  // Optional: created from this template
+  name       String
+  date       DateTime
+  campus     String?
+  notes      String?  @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  organization Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  template     ServiceTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  items        ServiceItem[]
+  assignments  ServiceAssignment[]
+  notifications Notification[]
+
+  @@index([orgId])
+  @@index([orgId, date])
+  @@index([templateId])
+  @@map("service_plans")
+}
+
+model ServiceItem {
+  id            String          @id @default(cuid())
+  servicePlanId String
+  songId        String?         // Optional: linked to music library
+  type          ServiceItemType
+  title         String
+  key           String?         // Musical key (for songs)
+  durationSec   Int             @default(0)
+  position      Int             // Order in the service
+  attachments   Json            @default("[]") // Array of {fileId, name, url}
+  notes         String?         @db.Text
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  servicePlan ServicePlan @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
+  song        Song?       @relation(fields: [songId], references: [id], onDelete: SetNull)
+
+  @@index([servicePlanId])
+  @@index([songId])
+  @@map("service_items")
+}
+
+model ServiceAssignment {
+  id            String           @id @default(cuid())
+  servicePlanId String
+  personId      String
+  role          String           // e.g., "Acoustic Guitar", "Camera 1", "Vocals"
+  status        AssignmentStatus @default(pending)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  servicePlan   ServicePlan    @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
+  person        Person         @relation(fields: [personId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@unique([servicePlanId, personId, role])
+  @@index([servicePlanId])
+  @@index([personId])
+  @@index([personId, status])
+  @@map("service_assignments")
+}
+
+model File {
+  id        String   @id @default(cuid())
+  orgId     String
+  path      String   // Full MinIO path
+  kind      String   // "person_photo", "service_attachment", etc.
+  ownerType String   // "Person", "ServiceItem", etc.
+  ownerId   String   // ID of the owner entity
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([ownerType, ownerId])
+  @@map("files")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  action    String   // "created", "updated", "deleted"
+  entity    String   // "Person", "ServicePlan", etc.
+  entityId  String
+  diff      Json?    // Changes made
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// Service Templates - for quick service planning
+model ServiceTemplate {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  description String?  @db.Text
+  template    Json     // Array of template items: {type, title, durationSec, notes}
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  servicePlans  ServicePlan[]
+
+  @@index([orgId])
+  @@index([orgId, isDefault])
+  @@map("service_templates")
+}
+
+// Music Library - Songs and Arrangements
+model Song {
+  id          String   @id @default(cuid())
+  orgId       String
+  title       String
+  artist      String?
+  ccliNumber  String?
+  bpm         Int?
+  timeSignature String? // e.g., "4/4", "3/4"
+  tags        Json     @default("[]") // Array of strings: ["worship", "fast", "contemporary"]
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization  Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  arrangements  Arrangement[]
+  serviceItems  ServiceItem[]
+
+  @@index([orgId])
+  @@index([orgId, title])
+  @@map("songs")
+}
+
+model Arrangement {
+  id          String   @id @default(cuid())
+  songId      String
+  name        String   // e.g., "Standard", "Acoustic", "Radio Version"
+  key         String   // e.g., "C", "D", "Eb"
+  chordChart  String?  @db.Text // URL or text content
+  lyrics      String?  @db.Text
+  audio       String?  // URL to audio file
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([songId])
+  @@map("arrangements")
+}
+
+// Person Availability - for conflict detection
+model PersonAvailability {
+  id        String   @id @default(cuid())
+  personId  String
+  date      DateTime
+  available Boolean  @default(true)
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, date])
+  @@index([personId])
+  @@index([date])
+  @@map("person_availability")
+}
+
+// Notifications - automatic reminders
+model Notification {
+  id           String             @id @default(cuid())
+  orgId        String
+  type         NotificationType
+  status       NotificationStatus @default(pending)
+  servicePlanId String?
+  assignmentId String?
+  recipientEmail String
+  recipientName String?
+  subject      String
+  body         String            @db.Text
+  scheduledFor DateTime
+  sentAt       DateTime?
+  error        String?           @db.Text
+  createdAt    DateTime          @default(now())
+
+  organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  servicePlan  ServicePlan?       @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
+  assignment   ServiceAssignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([status, scheduledFor])
+  @@index([servicePlanId])
+  @@index([assignmentId])
+  @@map("notifications")
+}

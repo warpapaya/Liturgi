@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: clearline
+      POSTGRES_PASSWORD: clearline_dev_password
+      POSTGRES_DB: clearline_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clearline"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: clearline_admin
+      MINIO_ROOT_PASSWORD: clearline_minio_secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # MinIO client to create buckets on startup
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      /usr/bin/mc alias set myminio http://minio:9000 clearline_admin clearline_minio_secret;
+      /usr/bin/mc mb myminio/clearline-uploads --ignore-existing;
+      /usr/bin/mc anonymous set download myminio/clearline-uploads;
+      exit 0;
+      "
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://clearline:clearline_dev_password@postgres:5432/clearline_db
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: clearline_admin
+      MINIO_SECRET_KEY: clearline_minio_secret
+      MINIO_USE_SSL: "false"
+      COOKIE_SECRET: dev_secret_change_in_production_min_32_chars_long
+      NODE_ENV: development
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    command: sh -c "npm run prisma:generate && npm run prisma:migrate && npm run dev"
+
+volumes:
+  postgres-data:
+  minio-data:

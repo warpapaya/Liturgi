@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-liturgi font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-ash text-charcoal hover:bg-gray-300 focus:ring-primary-500;
+  }
+
+  .btn-success {
+    @apply btn bg-sage-500 text-white hover:bg-sage-600 focus:ring-sage-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-rosary-600 text-white hover:bg-rosary-700 focus:ring-rosary-500;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 border border-ash rounded-liturgi focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-body;
+  }
+
+  .label {
+    @apply block text-sm font-semibold text-gray-700 mb-1;
+  }
+
+  .card {
+    @apply bg-white rounded-liturgi-lg shadow-sm p-6;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-liturgi text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-sage-100 text-sage-800;
+  }
+
+  .badge-warning {
+    @apply badge bg-gold-100 text-gold-800;
+  }
+
+  .badge-error {
+    @apply badge bg-rosary-100 text-rosary-800;
+  }
+
+  .badge-info {
+    @apply badge bg-primary-100 text-primary-800;
+  }
+}
