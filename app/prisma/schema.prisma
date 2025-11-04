@@ -26,6 +26,7 @@ enum Plan {
 enum PersonStatus {
   active
   inactive
+  visitor
 }
 
 enum ServiceItemType {
@@ -40,9 +41,53 @@ enum AssignmentStatus {
   declined
 }
 
+enum ServiceStatus {
+  draft
+  published
+  archived
+}
+
 enum GroupMemberRole {
   leader
+  co_leader
   member
+  guest
+}
+
+enum GroupStatus {
+  active
+  inactive
+  archived
+}
+
+enum GroupVisibility {
+  public
+  private
+  hidden
+}
+
+enum GroupCategory {
+  small_group
+  ministry_team
+  class
+  committee
+  prayer_group
+  bible_study
+  youth_group
+  kids_group
+  mens_group
+  womens_group
+  support_group
+  service_team
+  worship_team
+  other
+}
+
+enum MemberStatus {
+  active
+  invited
+  requested
+  declined
 }
 
 enum NotificationType {
@@ -58,16 +103,74 @@ enum NotificationStatus {
   failed
 }
 
-enum UserAccountStatus {
-  active
-  deactivated
-  deleted
+enum ContactMethodType {
+  mobile
+  home
+  work
+  other
 }
 
-enum TwoFactorMethod {
-  totp
-  sms
+enum AddressType {
+  home
+  work
+  other
+}
+
+enum CustomFieldType {
+  text
+  number
+  date
+  dropdown
+  checkbox
+  file
+}
+
+enum HouseholdRelation {
+  head
+  spouse
+  child
+  parent
+  other
+}
+
+enum ListType {
+  static
+  smart
+}
+
+enum NoteCategory {
+  general
+  pastoral_care
+  follow_up
+  other
+}
+
+enum FormFieldType {
+  text
+  textarea
+  number
   email
+  phone
+  date
+  dropdown
+  checkbox
+  radio
+  file
+}
+
+enum WorkflowStatus {
+  active
+  paused
+  completed
+}
+
+enum WorkflowStepType {
+  send_email
+  send_sms
+  assign_tag
+  create_task
+  notify_admin
+  wait
 }
 
 model Organization {
@@ -108,51 +211,36 @@ model Organization {
   files              File[]
   auditLogs          AuditLog[]
   notifications      Notification[]
+  households         Household[]
+  tagCategories      TagCategory[]
+  tags               Tag[]
+  customFieldDefs    CustomFieldDefinition[]
+  lists              SavedList[]
+  forms              Form[]
+  workflows          Workflow[]
   emailTemplates     EmailTemplate[]
-  customRoles        CustomRole[]
-  apiKeys            ApiKey[]
-  webhooks           Webhook[]
-  subscription       Subscription?
-  featureFlags       FeatureFlag[]
-  integrations       Integration[]
+  smsTemplates       SmsTemplate[]
+  attendanceRecords  AttendanceRecord[]
+  reports            Report[]
 
-  @@index([subdomain])
-  @@index([customDomain])
-  @@index([isActive])
   @@map("organizations")
 }
 
 model User {
-  id                String            @id @default(cuid())
-  orgId             String
-  email             String
-  passwordHash      String
-  role              Role              @default(member)
-  firstName         String?
-  lastName          String?
-  photoUrl          String?
-  phoneNumber       String?
-  accountStatus     UserAccountStatus @default(active)
-  emailVerified     Boolean           @default(false)
-  emailVerifiedAt   DateTime?
-  twoFactorEnabled  Boolean           @default(false)
-  twoFactorMethod   TwoFactorMethod?
-  twoFactorSecret   String?           // TOTP secret
-  twoFactorBackupCodes Json?          // Array of backup codes
-  require2FA        Boolean           @default(false) // Role-based enforcement
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  lastLoginAt       DateTime?
-  deletedAt         DateTime?
-  dataRetentionUntil DateTime?        // For GDPR compliance
+  id           String    @id @default(cuid())
+  orgId        String
+  email        String
+  passwordHash String
+  role         Role      @default(member)
+  firstName    String?
+  lastName     String?
+  createdAt    DateTime  @default(now())
+  lastLoginAt  DateTime?
 
-  organization       Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  sessions           Session[]
-  auditLogs          AuditLog[]
-  invitesSent        Invite[]            @relation("InvitesSent")
-  passwordResets     PasswordReset[]
-  emailVerifications EmailVerification[]
-  loginHistory       LoginHistory[]
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sessions     Session[]
+  auditLogs    AuditLog[]
+  invitesSent  Invite[]     @relation("InvitesSent")
 
   @@unique([orgId, email])
   @@index([orgId])
@@ -193,8 +281,8 @@ model Session {
   lastAccessedAt DateTime @default(now())
   createdAt     DateTime @default(now())
 
-  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([orgId])
   @@index([userId])
@@ -254,46 +342,98 @@ model LoginHistory {
 }
 
 model Person {
-  id         String       @id @default(cuid())
-  orgId      String
-  firstName  String
-  lastName   String
-  email      String?
-  phone      String?
-  photoUrl   String?
-  tags       Json         @default("[]") // Array of strings
-  notes      String?      @db.Text
-  status     PersonStatus @default(active)
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  id                   String       @id @default(cuid())
+  orgId                String
+  firstName            String
+  lastName             String
+  middleName           String?
+  nickname             String?
+  prefix               String?      // Mr., Mrs., Dr., etc.
+  suffix               String?      // Jr., Sr., III, etc.
+  gender               String?
+  birthDate            DateTime?
+  anniversary          DateTime?
+  photoUrl             String?
+  status               PersonStatus @default(active)
+  householdId          String?
+  householdRelation    HouseholdRelation?
 
-  organization       Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  groupMemberships   GroupMembership[]
-  serviceAssignments ServiceAssignment[]
-  availability       PersonAvailability[]
+  // Contact preferences
+  preferredContactMethod String?    // email, phone, sms
+  doNotContact         Boolean      @default(false)
+  emailOptIn           Boolean      @default(true)
+  smsOptIn             Boolean      @default(true)
+
+  // Profile completeness
+  profileCompleteness  Int          @default(0) // 0-100
+
+  // Metadata
+  source               String?      // How they were added (import, form, manual, etc.)
+  lastViewed           DateTime?
+  isFavorite           Boolean      @default(false)
+  mergedFrom           Json?        // Array of person IDs that were merged into this one
+
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  organization         Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  household            Household?           @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  groupMemberships     GroupMembership[]
+  serviceAssignments   ServiceAssignment[]
+  availability         PersonAvailability[]
+  phoneNumbers         PersonPhone[]
+  emailAddresses       PersonEmail[]
+  addresses            PersonAddress[]
+  emergencyContacts    EmergencyContact[]
+  customFieldValues    CustomFieldValue[]
+  personTags           PersonTag[]
+  notes                PersonNote[]
+  attendanceRecords    AttendanceRecord[]
+  communications       Communication[]
+  formSubmissions      FormSubmission[]
+  workflowInstances    WorkflowInstance[]
 
   @@index([orgId])
   @@index([orgId, status])
-  @@index([orgId, email])
+  @@index([householdId])
+  @@index([birthDate])
+  @@index([anniversary])
   @@map("people")
 }
 
 model Group {
-  id          String   @id @default(cuid())
+  id          String          @id @default(cuid())
   orgId       String
   name        String
-  description String?  @db.Text
-  cadence     String?  // Free text: "Weekly on Wednesdays", "Bi-weekly", etc.
+  description String?         @db.Text
+  cadence     String? // Free text: "Weekly on Wednesdays", "Bi-weekly", etc.
   location    String?
-  isOpen      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isOpen      Boolean         @default(true)
+  status      GroupStatus     @default(active)
+  visibility  GroupVisibility @default(public)
+  category    GroupCategory   @default(small_group)
+  capacity    Int? // Maximum members (null = unlimited)
+  photoUrl    String?
+  meetingDay  String? // e.g., "Monday", "Wednesday"
+  meetingTime String? // e.g., "7:00 PM"
+  campus      String?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
-  organization Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  members      GroupMembership[]
-  comments     GroupComment[]
+  organization      Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  members           GroupMembership[]
+  comments          GroupComment[]
+  meetings          GroupMeeting[]
+  resources         GroupResource[]
+  prayerRequests    GroupPrayerRequest[]
+  attendanceRecords GroupAttendance[]
 
   @@index([orgId])
+  @@index([orgId, status])
+  @@index([orgId, category])
+  @@index([orgId, visibility])
   @@map("groups")
 }
 
@@ -302,21 +442,27 @@ model GroupMembership {
   groupId   String
   personId  String
   role      GroupMemberRole @default(member)
+  status    MemberStatus    @default(active)
+  notes     String?         @db.Text // Group-specific notes about this member
+  joinedAt  DateTime        @default(now())
   createdAt DateTime        @default(now())
 
-  group  Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  group             Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  person            Person            @relation(fields: [personId], references: [id], onDelete: Cascade)
+  attendanceRecords GroupAttendance[]
 
   @@unique([groupId, personId])
   @@index([groupId])
   @@index([personId])
+  @@index([groupId, role])
+  @@index([groupId, status])
   @@map("group_memberships")
 }
 
 model GroupComment {
   id        String   @id @default(cuid())
   groupId   String
-  userId    String   // Not FK to avoid cascade issues if user deleted
+  userId    String // Not FK to avoid cascade issues if user deleted
   content   String   @db.Text
   createdAt DateTime @default(now())
 
@@ -326,21 +472,102 @@ model GroupComment {
   @@map("group_comments")
 }
 
+model GroupMeeting {
+  id          String    @id @default(cuid())
+  groupId     String
+  title       String
+  description String?   @db.Text
+  startTime   DateTime
+  endTime     DateTime?
+  location    String?
+  isRecurring Boolean   @default(false)
+  isCancelled Boolean   @default(false)
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  group      Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  attendance GroupAttendance[]
+
+  @@index([groupId])
+  @@index([groupId, startTime])
+  @@map("group_meetings")
+}
+
+model GroupAttendance {
+  id           String   @id @default(cuid())
+  meetingId    String
+  groupId      String
+  membershipId String
+  attended     Boolean  @default(false)
+  notes        String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  meeting    GroupMeeting    @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  group      Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, membershipId])
+  @@index([meetingId])
+  @@index([groupId])
+  @@index([membershipId])
+  @@map("group_attendance")
+}
+
+model GroupResource {
+  id          String   @id @default(cuid())
+  groupId     String
+  title       String
+  description String?  @db.Text
+  type        String // "document", "video", "audio", "link", "curriculum"
+  url         String?
+  fileUrl     String?
+  createdBy   String // userId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@index([groupId, type])
+  @@map("group_resources")
+}
+
+model GroupPrayerRequest {
+  id          String    @id @default(cuid())
+  groupId     String
+  requestedBy String // userId or "anonymous"
+  title       String
+  content     String    @db.Text
+  isAnswered  Boolean   @default(false)
+  answeredAt  DateTime?
+  isPrivate   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@index([groupId, isAnswered])
+  @@map("group_prayer_requests")
+}
+
 model ServicePlan {
-  id         String   @id @default(cuid())
+  id         String        @id @default(cuid())
   orgId      String
-  templateId String?  // Optional: created from this template
+  templateId String?       // Optional: created from this template
   name       String
   date       DateTime
   campus     String?
-  notes      String?  @db.Text
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  status     ServiceStatus @default(draft)
+  notes      String?       @db.Text
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
-  organization Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  template     ServiceTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  items        ServiceItem[]
-  assignments  ServiceAssignment[]
+  organization  Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  template      ServiceTemplate?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  items         ServiceItem[]
+  assignments   ServiceAssignment[]
   notifications Notification[]
 
   @@index([orgId])
@@ -352,12 +579,12 @@ model ServicePlan {
 model ServiceItem {
   id            String          @id @default(cuid())
   servicePlanId String
-  songId        String?         // Optional: linked to music library
+  songId        String? // Optional: linked to music library
   type          ServiceItemType
   title         String
-  key           String?         // Musical key (for songs)
+  key           String? // Musical key (for songs)
   durationSec   Int             @default(0)
-  position      Int             // Order in the service
+  position      Int // Order in the service
   attachments   Json            @default("[]") // Array of {fileId, name, url}
   notes         String?         @db.Text
   createdAt     DateTime        @default(now())
@@ -375,7 +602,7 @@ model ServiceAssignment {
   id            String           @id @default(cuid())
   servicePlanId String
   personId      String
-  role          String           // e.g., "Acoustic Guitar", "Camera 1", "Vocals"
+  role          String // e.g., "Acoustic Guitar", "Camera 1", "Vocals"
   status        AssignmentStatus @default(pending)
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
@@ -394,10 +621,10 @@ model ServiceAssignment {
 model File {
   id        String   @id @default(cuid())
   orgId     String
-  path      String   // Full MinIO path
-  kind      String   // "person_photo", "service_attachment", etc.
-  ownerType String   // "Person", "ServiceItem", etc.
-  ownerId   String   // ID of the owner entity
+  path      String // Full MinIO path
+  kind      String // "person_photo", "service_attachment", etc.
+  ownerType String // "Person", "ServiceItem", etc.
+  ownerId   String // ID of the owner entity
   createdAt DateTime @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -411,10 +638,10 @@ model AuditLog {
   id        String   @id @default(cuid())
   orgId     String
   userId    String
-  action    String   // "created", "updated", "deleted"
-  entity    String   // "Person", "ServicePlan", etc.
+  action    String // "created", "updated", "deleted"
+  entity    String // "Person", "ServicePlan", etc.
   entityId  String
-  diff      Json?    // Changes made
+  diff      Json? // Changes made
   createdAt DateTime @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -432,13 +659,13 @@ model ServiceTemplate {
   orgId       String
   name        String
   description String?  @db.Text
-  template    Json     // Array of template items: {type, title, durationSec, notes}
+  template    Json // Array of template items: {type, title, durationSec, notes}
   isDefault   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  servicePlans  ServicePlan[]
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  servicePlans ServicePlan[]
 
   @@index([orgId])
   @@index([orgId, isDefault])
@@ -447,21 +674,21 @@ model ServiceTemplate {
 
 // Music Library - Songs and Arrangements
 model Song {
-  id          String   @id @default(cuid())
-  orgId       String
-  title       String
-  artist      String?
-  ccliNumber  String?
-  bpm         Int?
+  id            String   @id @default(cuid())
+  orgId         String
+  title         String
+  artist        String?
+  ccliNumber    String?
+  bpm           Int?
   timeSignature String? // e.g., "4/4", "3/4"
-  tags        Json     @default("[]") // Array of strings: ["worship", "fast", "contemporary"]
-  notes       String?  @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  tags          Json     @default("[]") // Array of strings: ["worship", "fast", "contemporary"]
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  organization  Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  arrangements  Arrangement[]
-  serviceItems  ServiceItem[]
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  arrangements Arrangement[]
+  serviceItems ServiceItem[]
 
   @@index([orgId])
   @@index([orgId, title])
@@ -469,15 +696,15 @@ model Song {
 }
 
 model Arrangement {
-  id          String   @id @default(cuid())
-  songId      String
-  name        String   // e.g., "Standard", "Acoustic", "Radio Version"
-  key         String   // e.g., "C", "D", "Eb"
-  chordChart  String?  @db.Text // URL or text content
-  lyrics      String?  @db.Text
-  audio       String?  // URL to audio file
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  songId     String
+  name       String // e.g., "Standard", "Acoustic", "Radio Version"
+  key        String // e.g., "C", "D", "Eb"
+  chordChart String?  @db.Text // URL or text content
+  lyrics     String?  @db.Text
+  audio      String? // URL to audio file
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
 
@@ -505,20 +732,20 @@ model PersonAvailability {
 
 // Notifications - automatic reminders
 model Notification {
-  id           String             @id @default(cuid())
-  orgId        String
-  type         NotificationType
-  status       NotificationStatus @default(pending)
-  servicePlanId String?
-  assignmentId String?
+  id             String             @id @default(cuid())
+  orgId          String
+  type           NotificationType
+  status         NotificationStatus @default(pending)
+  servicePlanId  String?
+  assignmentId   String?
   recipientEmail String
-  recipientName String?
-  subject      String
-  body         String            @db.Text
-  scheduledFor DateTime
-  sentAt       DateTime?
-  error        String?           @db.Text
-  createdAt    DateTime          @default(now())
+  recipientName  String?
+  subject        String
+  body           String             @db.Text
+  scheduledFor   DateTime
+  sentAt         DateTime?
+  error          String?            @db.Text
+  createdAt      DateTime           @default(now())
 
   organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
   servicePlan  ServicePlan?       @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
@@ -531,218 +758,431 @@ model Notification {
   @@map("notifications")
 }
 
-// Email Templates - customizable email templates
-model EmailTemplate {
+// ==================== PEOPLE MODULE EXTENSIONS ====================
+
+// Households for family management
+model Household {
   id          String   @id @default(cuid())
   orgId       String
-  name        String   // e.g., "welcome", "password_reset", "assignment_notification"
-  subject     String
-  htmlBody    String   @db.Text
-  textBody    String?  @db.Text
-  variables   Json     @default("[]") // Array of variable names: ["userName", "resetLink"]
-  isSystem    Boolean  @default(false) // System templates can't be deleted
-  isActive    Boolean  @default(true)
+  name        String
+  phone       String?
+  email       String?
+  addressId   String?  // Primary household address
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  members      Person[]
+
+  @@index([orgId])
+  @@map("households")
+}
+
+// Multiple phone numbers per person
+model PersonPhone {
+  id         String            @id @default(cuid())
+  personId   String
+  type       ContactMethodType
+  number     String
+  isPrimary  Boolean           @default(false)
+  doNotCall  Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@map("person_phones")
+}
+
+// Multiple email addresses per person
+model PersonEmail {
+  id         String   @id @default(cuid())
+  personId   String
+  email      String
+  isPrimary  Boolean  @default(false)
+  isWork     Boolean  @default(false)
+  bounced    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@index([email])
+  @@map("person_emails")
+}
+
+// Physical addresses
+model PersonAddress {
+  id           String      @id @default(cuid())
+  personId     String
+  type         AddressType
+  street       String
+  street2      String?
+  city         String
+  state        String
+  zip          String
+  country      String      @default("US")
+  isPrimary    Boolean     @default(false)
+  latitude     Float?
+  longitude    Float?
+  isValidated  Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@index([zip])
+  @@map("person_addresses")
+}
+
+// Emergency contacts
+model EmergencyContact {
+  id           String   @id @default(cuid())
+  personId     String
+  name         String
+  relationship String
+  phone        String
+  email        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@map("emergency_contacts")
+}
+
+// Tag categories for organization
+model TagCategory {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  color       String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  tags         Tag[]
+
+  @@index([orgId])
+  @@map("tag_categories")
+}
+
+// Individual tags
+model Tag {
+  id          String   @id @default(cuid())
+  orgId       String
+  categoryId  String?
+  name        String
+  color       String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  category     TagCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  personTags   PersonTag[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@index([categoryId])
+  @@map("tags")
+}
+
+// Many-to-many relationship between people and tags
+model PersonTag {
+  id         String   @id @default(cuid())
+  personId   String
+  tagId      String
+  addedBy    String?  // User ID who added the tag
+  createdAt  DateTime @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, tagId])
+  @@index([personId])
+  @@index([tagId])
+  @@map("person_tags")
+}
+
+// Custom field definitions
+model CustomFieldDefinition {
+  id              String          @id @default(cuid())
+  orgId           String
+  name            String
+  label           String
+  type            CustomFieldType
+  options         Json?           // For dropdown fields: {values: ["option1", "option2"]}
+  defaultValue    String?
+  isRequired      Boolean         @default(false)
+  isVisible       Boolean         @default(true)
+  visibleToRoles  Json?           // Array of role names
+  groupName       String?         // For organizing fields into sections
+  position        Int             @default(0)
+  validationRules Json?           // {min, max, pattern, etc.}
+  helpText        String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  values       CustomFieldValue[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@map("custom_field_definitions")
+}
+
+// Custom field values for people
+model CustomFieldValue {
+  id        String   @id @default(cuid())
+  personId  String
+  fieldId   String
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  person Person                 @relation(fields: [personId], references: [id], onDelete: Cascade)
+  field  CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, fieldId])
+  @@index([personId])
+  @@index([fieldId])
+  @@map("custom_field_values")
+}
+
+// Saved lists (both static and smart)
+model SavedList {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  description String?
+  type        ListType
+  filters     Json?    // For smart lists: {status: "active", tags: ["volunteer"]}
+  personIds   Json?    // For static lists: ["id1", "id2", ...]
+  createdBy   String?  // User ID
+  isShared    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, name])
+  @@index([orgId])
+  @@map("saved_lists")
+}
+
+// Notes attached to people
+model PersonNote {
+  id         String        @id @default(cuid())
+  personId   String
+  category   NoteCategory  @default(general)
+  content    String        @db.Text
+  authorId   String        // User ID
+  isPrivate  Boolean       @default(false)
+  pinned     Boolean       @default(false)
+  attachments Json?        // Array of file URLs
+  reminderAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@index([authorId])
+  @@index([reminderAt])
+  @@map("person_notes")
+}
+
+// Attendance tracking
+model AttendanceRecord {
+  id            String   @id @default(cuid())
+  orgId         String
+  personId      String
+  servicePlanId String?  // For service attendance
+  groupId       String?  // For group attendance
+  date          DateTime
+  present       Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  person       Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, servicePlanId, date])
+  @@index([orgId])
+  @@index([personId])
+  @@index([date])
+  @@map("attendance_records")
+}
+
+// Public forms for data collection
+model Form {
+  id            String   @id @default(cuid())
+  orgId         String
+  name          String
+  description   String?
+  fields        Json     // Array of field definitions
+  isPublic      Boolean  @default(true)
+  requireAuth   Boolean  @default(false)
+  allowAnonymous Boolean @default(false)
+  confirmEmail  String?  @db.Text // Confirmation email template
+  embedCode     String?  @db.Text
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  organization Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  submissions  FormSubmission[]
+
+  @@index([orgId])
+  @@map("forms")
+}
+
+// Form submissions
+model FormSubmission {
+  id           String   @id @default(cuid())
+  formId       String
+  personId     String?  // Linked person if not anonymous
+  data         Json     // Submitted form data
+  ipAddress    String?
+  userAgent    String?
+  isReviewed   Boolean  @default(false)
+  reviewedBy   String?  // User ID
+  reviewedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  form   Form    @relation(fields: [formId], references: [id], onDelete: Cascade)
+  person Person? @relation(fields: [personId], references: [id], onDelete: SetNull)
+
+  @@index([formId])
+  @@index([personId])
+  @@index([createdAt])
+  @@map("form_submissions")
+}
+
+// Email templates
+model EmailTemplate {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  subject     String
+  body        String   @db.Text
+  variables   Json?    // Available merge fields
+  category    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization  Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  communications Communication[]
+
   @@index([orgId])
   @@map("email_templates")
 }
 
-// Roles - custom role management
-model CustomRole {
+// SMS templates
+model SmsTemplate {
   id          String   @id @default(cuid())
   orgId       String
   name        String
-  description String?  @db.Text
-  permissions Json     // Array of permission strings
-  priority    Int      @default(0) // Higher priority = more permissions
-  isSystem    Boolean  @default(false)
+  message     String
+  variables   Json?
+  category    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, name])
   @@index([orgId])
-  @@map("custom_roles")
+  @@map("sms_templates")
 }
 
-// API Keys - for API access
-model ApiKey {
-  id          String   @id @default(cuid())
+// Communication history (emails, SMS)
+model Communication {
+  id             String    @id @default(cuid())
+  personId       String
+  type           String    // email, sms
+  templateId     String?
+  subject        String?
+  content        String    @db.Text
+  status         String    // sent, failed, bounced, opened, clicked
+  sentAt         DateTime?
+  openedAt       DateTime?
+  clickedAt      DateTime?
+  error          String?
+  externalId     String?   // ID from email/SMS provider
+  createdAt      DateTime  @default(now())
+
+  person   Person         @relation(fields: [personId], references: [id], onDelete: Cascade)
+  template EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([personId])
+  @@index([status])
+  @@index([sentAt])
+  @@map("communications")
+}
+
+// Workflows (automation)
+model Workflow {
+  id          String         @id @default(cuid())
   orgId       String
   name        String
-  keyHash     String   @unique
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
-  rateLimit   Int      @default(1000) // Requests per hour
-  permissions Json     @default("[]") // Scoped permissions
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  description String?
+  trigger     Json           // {type: "tag_added", tagId: "xyz"}
+  steps       Json           // Array of workflow steps
+  status      WorkflowStatus @default(active)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@index([orgId])
-  @@index([keyHash])
-  @@map("api_keys")
-}
-
-// Webhooks - webhook configuration
-model Webhook {
-  id          String   @id @default(cuid())
-  orgId       String
-  url         String
-  events      Json     @default("[]") // Array of event names
-  secret      String   // For signature verification
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  deliveries   WebhookDelivery[]
+  organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  instances    WorkflowInstance[]
 
   @@index([orgId])
-  @@map("webhooks")
+  @@index([status])
+  @@map("workflows")
 }
 
-// Webhook Deliveries - webhook delivery logs
-model WebhookDelivery {
-  id          String   @id @default(cuid())
-  webhookId   String
-  event       String
-  payload     Json
-  statusCode  Int?
-  response    String?  @db.Text
-  error       String?  @db.Text
-  attempts    Int      @default(0)
-  nextRetryAt DateTime?
-  succeededAt DateTime?
-  failedAt    DateTime?
-  createdAt   DateTime @default(now())
-
-  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
-
-  @@index([webhookId])
-  @@index([createdAt])
-  @@map("webhook_deliveries")
-}
-
-// Billing - subscription and payment tracking
-model Subscription {
-  id                String   @id @default(cuid())
-  orgId             String   @unique
-  stripeCustomerId  String?  @unique
-  stripeSubscriptionId String? @unique
-  stripePriceId     String?
-  status            String   // active, past_due, canceled, trialing
-  currentPeriodEnd  DateTime?
-  cancelAtPeriodEnd Boolean  @default(false)
-  canceledAt        DateTime?
-  trialEnd          DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  invoices     Invoice[]
-  usageRecords UsageRecord[]
-
-  @@index([orgId])
-  @@index([stripeCustomerId])
-  @@index([stripeSubscriptionId])
-  @@map("subscriptions")
-}
-
-// Invoices - billing invoices
-model Invoice {
+// Workflow instances (per person)
+model WorkflowInstance {
   id             String   @id @default(cuid())
-  subscriptionId String
-  stripeInvoiceId String? @unique
-  amountDue      Int      // In cents
-  amountPaid     Int      // In cents
-  currency       String   @default("usd")
-  status         String   // draft, open, paid, void, uncollectible
-  hostedUrl      String?
-  pdfUrl         String?
-  dueDate        DateTime?
-  paidAt         DateTime?
-  createdAt      DateTime @default(now())
+  workflowId     String
+  personId       String
+  currentStep    Int      @default(0)
+  status         String   // running, completed, failed, paused
+  startedAt      DateTime @default(now())
+  completedAt    DateTime?
+  error          String?
+  stepHistory    Json?    // Array of completed steps
+  updatedAt      DateTime @updatedAt
 
-  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  person   Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
 
-  @@index([subscriptionId])
-  @@index([stripeInvoiceId])
-  @@map("invoices")
+  @@index([workflowId])
+  @@index([personId])
+  @@index([status])
+  @@map("workflow_instances")
 }
 
-// Usage Records - for usage-based billing
-model UsageRecord {
-  id             String   @id @default(cuid())
-  subscriptionId String
-  metric         String   // e.g., "people", "services", "sms_sent"
-  quantity       Int
-  timestamp      DateTime
-  createdAt      DateTime @default(now())
-
-  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-
-  @@index([subscriptionId])
-  @@index([metric, timestamp])
-  @@map("usage_records")
-}
-
-// Feature Flags - feature management per organization
-model FeatureFlag {
+// Reports (saved queries and analytics)
+model Report {
   id          String   @id @default(cuid())
   orgId       String
-  name        String   // e.g., "advanced_scheduling", "ai_suggestions"
-  enabled     Boolean  @default(false)
-  config      Json?    // Additional configuration
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@unique([orgId, name])
-  @@index([orgId])
-  @@map("feature_flags")
-}
-
-// Saved Searches - user saved searches
-model SavedSearch {
-  id          String   @id @default(cuid())
-  userId      String
   name        String
-  entity      String   // "people", "services", "groups"
-  filters     Json     // Search filter configuration
-  isDefault   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([userId])
-  @@map("saved_searches")
-}
-
-// Integrations - third-party integration status
-model Integration {
-  id          String   @id @default(cuid())
-  orgId       String
-  name        String   // "stripe", "mailchimp", "zapier", "google_workspace"
-  status      String   // "active", "error", "disabled"
-  config      Json     // Integration-specific configuration (encrypted)
-  credentials Json?    // Encrypted credentials
-  lastSyncAt  DateTime?
-  error       String?  @db.Text
+  description String?
+  type        String   // demographic, growth, engagement, custom
+  config      Json     // Report configuration
+  schedule    String?  // Cron expression for scheduled reports
+  recipients  Json?    // Array of email addresses
+  createdBy   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, name])
   @@index([orgId])
-  @@map("integrations")
+  @@map("reports")
 }
