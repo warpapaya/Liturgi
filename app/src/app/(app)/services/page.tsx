@@ -9,6 +9,7 @@ interface ServicePlan {
   name: string
   date: string
   campus: string | null
+  status: 'draft' | 'published' | 'archived'
   _count: {
     items: number
     assignments: number
@@ -25,6 +26,18 @@ export default function ServicesPage() {
       .then((data) => setServices(data.servicePlans || []))
       .finally(() => setLoading(false))
   }, [])
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'published':
+        return 'bg-green-100 text-green-800'
+      case 'archived':
+        return 'bg-gray-100 text-gray-800'
+      case 'draft':
+      default:
+        return 'bg-yellow-100 text-yellow-800'
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -57,8 +70,13 @@ export default function ServicesPage() {
                 className="block p-4 border border-ash rounded-liturgi hover:border-primary-400 hover:bg-primary-50 transition-colors"
               >
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium text-gray-900">{service.name}</h3>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium text-gray-900">{service.name}</h3>
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(service.status)}`}>
+                        {service.status}
+                      </span>
+                    </div>
                     <p className="text-sm text-gray-500">
                       {format(new Date(service.date), 'EEEE, MMMM d, yyyy')}
                       {service.campus && ` • ${service.campus}`}

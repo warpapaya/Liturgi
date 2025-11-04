@@ -41,6 +41,12 @@ enum AssignmentStatus {
   declined
 }
 
+enum ServiceStatus {
+  draft
+  published
+  archived
+}
+
 enum GroupMemberRole {
   leader
   member
@@ -335,15 +341,16 @@ model GroupComment {
 }
 
 model ServicePlan {
-  id         String   @id @default(cuid())
+  id         String        @id @default(cuid())
   orgId      String
-  templateId String?  // Optional: created from this template
+  templateId String?       // Optional: created from this template
   name       String
   date       DateTime
   campus     String?
-  notes      String?  @db.Text
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  status     ServiceStatus @default(draft)
+  notes      String?       @db.Text
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
   organization Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
   template     ServiceTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
