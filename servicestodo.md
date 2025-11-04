@@ -56,7 +56,7 @@
 ### Templates
 - [x] Service template library page
 - [x] Create template from existing service
-- [ ] Edit template structure
+- [x] Edit template structure
 - [x] Set default templates
 - [ ] Template categories (Sunday AM, Sunday PM, Midweek, Special)
 - [x] Apply template to new service
