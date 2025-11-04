@@ -1,0 +1,513 @@
+openapi: 3.0.0
+info:
+  title: Liturgi API
+  description: |
+    Comprehensive API for Liturgi - Modern Church Management Platform
+
+    ## Authentication
+    All authenticated endpoints require a session cookie (`clearline_session`)
+
+    ## Rate Limiting
+    - Registration: 3 attempts/hour per IP
+    - Login: 5 attempts/15 minutes per IP+email
+    - API calls: 1000 requests/hour per API key
+
+    ## Webhooks
+    Webhooks are signed using HMAC-SHA256 with your webhook secret.
+
+  version: 1.0.0
+  contact:
+    name: Liturgi Support
+    email: support@liturgi.com
+    url: https://docs.liturgi.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://app.liturgi.com/api
+    description: Production
+  - url: https://staging.liturgi.com/api
+    description: Staging
+  - url: http://localhost:3000/api
+    description: Local Development
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: clearline_session
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        orgId:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, leader, member, viewer]
+        firstName:
+          type: string
+          nullable: true
+        lastName:
+          type: string
+          nullable: true
+        photoUrl:
+          type: string
+          format: uri
+          nullable: true
+        emailVerified:
+          type: boolean
+        twoFactorEnabled:
+          type: boolean
+        accountStatus:
+          type: string
+          enum: [active, deactivated, deleted]
+        createdAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        subdomain:
+          type: string
+        plan:
+          type: string
+          enum: [trial, basic, pro]
+        logoUrl:
+          type: string
+          format: uri
+          nullable: true
+        timezone:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Person:
+      type: object
+      properties:
+        id:
+          type: string
+        orgId:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive]
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ServicePlan:
+      type: object
+      properties:
+        id:
+          type: string
+        orgId:
+          type: string
+        name:
+          type: string
+        date:
+          type: string
+          format: date-time
+        campus:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: object
+          nullable: true
+
+paths:
+  /auth/register:
+    post:
+      summary: Register new organization or user
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, orgName]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                orgName:
+                  type: string
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                inviteCode:
+                  type: string
+      responses:
+        '201':
+          description: Successfully registered
+        '400':
+          description: Validation error
+
+  /auth/login:
+    post:
+      summary: Login with email and password
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                twoFactorCode:
+                  type: string
+                  description: Required if 2FA is enabled
+      responses:
+        '200':
+          description: Successfully logged in
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: clearline_session=abc123; HttpOnly; Secure
+        '401':
+          description: Invalid credentials
+
+  /auth/logout:
+    post:
+      summary: Logout current session
+      tags: [Authentication]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Successfully logged out
+
+  /auth/me:
+    get:
+      summary: Get current user info
+      tags: [Authentication]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated
+
+  /user/profile:
+    get:
+      summary: Get user profile
+      tags: [User]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    patch:
+      summary: Update user profile
+      tags: [User]
+      security:
+        - sessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                phoneNumber:
+                  type: string
+                photoUrl:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Profile updated
+
+  /user/password:
+    post:
+      summary: Change password
+      tags: [User]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          description: Password changed
+        '400':
+          description: Invalid current password
+
+  /user/sessions:
+    get:
+      summary: Get all active sessions
+      tags: [User]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      type: object
+    delete:
+      summary: Logout from all devices
+      tags: [User]
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: keepCurrent
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Sessions deleted
+
+  /people:
+    get:
+      summary: List people
+      tags: [People]
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: tag
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of people
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  people:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Person'
+                  total:
+                    type: integer
+    post:
+      summary: Create person
+      tags: [People]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName]
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Person created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+
+  /services:
+    get:
+      summary: List service plans
+      tags: [Services]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: List of service plans
+    post:
+      summary: Create service plan
+      tags: [Services]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, date]
+              properties:
+                name:
+                  type: string
+                date:
+                  type: string
+                  format: date-time
+                campus:
+                  type: string
+      responses:
+        '201':
+          description: Service plan created
+
+  /organization/settings:
+    get:
+      summary: Get organization settings
+      tags: [Organization]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Organization settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+    patch:
+      summary: Update organization settings
+      tags: [Organization]
+      security:
+        - sessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                logoUrl:
+                  type: string
+                timezone:
+                  type: string
+      responses:
+        '200':
+          description: Settings updated
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization
+  - name: User
+    description: User profile and settings management
+  - name: Organization
+    description: Organization settings and configuration
+  - name: People
+    description: People directory management
+  - name: Services
+    description: Service planning and scheduling
+  - name: Groups
+    description: Group management
+  - name: Billing
+    description: Subscription and billing management
+  - name: Webhooks
+    description: Webhook configuration and management
+  - name: API Keys
+    description: API key management
