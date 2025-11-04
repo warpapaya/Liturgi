@@ -13,7 +13,7 @@
 - [ ] Multi-service view (calendar/list toggle)
 - [x] Service status indicators (draft, published, archived)
 - [x] Service time calculator (total duration display)
-- [ ] Print-friendly service plan view
+- [x] Print-friendly service plan view
 - [ ] Export service plan to PDF
 
 ### Service Items
@@ -22,7 +22,7 @@
 - [ ] Rich text editor for item notes
 - [x] Item duration input with auto-calculation
 - [x] Quick add from song library
-- [ ] Bulk item operations (delete multiple, move multiple)
+- [x] Bulk item operations (delete multiple, move multiple)
 - [ ] Item templates (pre-configured common items)
 - [ ] Attachments per item (chord charts, lyrics, media)
 - [ ] Item-level notes visible to specific roles only
@@ -41,17 +41,17 @@
 - [ ] Alternate arrangements comparison view
 
 ### Team Assignments
-- [ ] Assignment panel/drawer on service detail page
+- [x] Assignment panel/drawer on service detail page
 - [ ] Position/role management (configure available positions)
 - [ ] Assign person to position with drag-and-drop
 - [ ] Bulk assignment from previous service
-- [ ] Assignment status badges (pending, accepted, declined)
+- [x] Assignment status badges (pending, accepted, declined)
 - [ ] Conflict detection (person assigned multiple times, availability)
 - [ ] Assignment history per person
 - [ ] Send assignment notifications
 - [ ] Decline reason capture
 - [ ] Substitute/replacement workflow
-- [ ] Print assignment roster
+- [x] Print assignment roster
 
 ### Templates
 - [x] Service template library page
