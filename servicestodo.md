@@ -5,23 +5,23 @@
 ## 🎯 Phase 1: Core MVP Features (CRITICAL)
 
 ### Service Plan Management
-- [ ] Service detail page with full order of service view
-- [ ] Drag-and-drop reordering of service items
-- [ ] Service creation wizard with template selection
-- [ ] Duplicate/clone service plans
-- [ ] Delete service plans with confirmation
+- [x] Service detail page with full order of service view
+- [x] Drag-and-drop reordering of service items
+- [x] Service creation wizard with template selection
+- [x] Duplicate/clone service plans
+- [x] Delete service plans with confirmation
 - [ ] Multi-service view (calendar/list toggle)
-- [ ] Service status indicators (draft, published, archived)
-- [ ] Service time calculator (total duration display)
+- [x] Service status indicators (draft, published, archived)
+- [x] Service time calculator (total duration display)
 - [ ] Print-friendly service plan view
 - [ ] Export service plan to PDF
 
 ### Service Items
-- [ ] Add/edit/delete service items inline
-- [ ] Item type icons and visual distinction (song, reading, announcement, etc.)
+- [x] Add/edit/delete service items inline
+- [x] Item type icons and visual distinction (song, reading, announcement, etc.)
 - [ ] Rich text editor for item notes
-- [ ] Item duration input with auto-calculation
-- [ ] Quick add from song library
+- [x] Item duration input with auto-calculation
+- [x] Quick add from song library
 - [ ] Bulk item operations (delete multiple, move multiple)
 - [ ] Item templates (pre-configured common items)
 - [ ] Attachments per item (chord charts, lyrics, media)
@@ -29,10 +29,10 @@
 - [ ] Transitions between items (automatic timing)
 
 ### Song Integration
-- [ ] Song library browser modal
-- [ ] Quick song search and add
-- [ ] Display song metadata in service items (key, BPM, time signature)
-- [ ] Arrangement selector per service item
+- [x] Song library browser modal
+- [x] Quick song search and add
+- [x] Display song metadata in service items (key, BPM, time signature)
+- [x] Arrangement selector per service item
 - [ ] Key transposer for arrangements
 - [ ] Link to full song details from service item
 - [ ] Recently used songs quick access
@@ -54,12 +54,12 @@
 - [ ] Print assignment roster
 
 ### Templates
-- [ ] Service template library page
-- [ ] Create template from existing service
+- [x] Service template library page
+- [x] Create template from existing service
 - [ ] Edit template structure
-- [ ] Set default templates
+- [x] Set default templates
 - [ ] Template categories (Sunday AM, Sunday PM, Midweek, Special)
-- [ ] Apply template to new service
+- [x] Apply template to new service
 - [ ] Template usage tracking
 - [ ] Share templates across campus (multi-site)
 
