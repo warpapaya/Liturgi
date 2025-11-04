@@ -50,6 +50,8 @@ export default function ServiceDetailPage() {
   const [showAssignmentForm, setShowAssignmentForm] = useState(false)
   const [showTemplateForm, setShowTemplateForm] = useState(false)
   const [showSongBrowser, setShowSongBrowser] = useState(false)
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+  const [bulkMode, setBulkMode] = useState(false)
 
   useEffect(() => {
     fetchService()
@@ -143,6 +145,50 @@ export default function ServiceDetailPage() {
     }
   }
 
+  const handlePrint = () => {
+    window.print()
+  }
+
+  const toggleItemSelection = (itemId: string) => {
+    const newSelection = new Set(selectedItems)
+    if (newSelection.has(itemId)) {
+      newSelection.delete(itemId)
+    } else {
+      newSelection.add(itemId)
+    }
+    setSelectedItems(newSelection)
+  }
+
+  const selectAllItems = () => {
+    if (service) {
+      setSelectedItems(new Set(service.items.map(item => item.id)))
+    }
+  }
+
+  const deselectAllItems = () => {
+    setSelectedItems(new Set())
+  }
+
+  const bulkDeleteItems = async () => {
+    if (selectedItems.size === 0) return
+    if (!confirm(`Delete ${selectedItems.size} selected item(s)?`)) return
+
+    try {
+      await Promise.all(
+        Array.from(selectedItems).map(itemId =>
+          fetch(`/api/services/${service?.id}/items/${itemId}`, {
+            method: 'DELETE',
+          })
+        )
+      )
+      setSelectedItems(new Set())
+      setBulkMode(false)
+      fetchService()
+    } catch (error) {
+      alert('Failed to delete some items')
+    }
+  }
+
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
@@ -182,7 +228,7 @@ export default function ServiceDetailPage() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-        <Link href="/services" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
+        <Link href="/services" className="text-primary-600 hover:text-primary-700 text-sm font-medium print:hidden">
           ← Back to Services
         </Link>
         <div className="mt-4 flex items-start justify-between">
@@ -192,19 +238,25 @@ export default function ServiceDetailPage() {
               <select
                 value={service.status}
                 onChange={(e) => updateStatus(e.target.value as any)}
-                className={`px-3 py-1 text-sm font-medium rounded-full border ${getStatusColor(service.status)}`}
+                className={`px-3 py-1 text-sm font-medium rounded-full border ${getStatusColor(service.status)} print:hidden`}
               >
                 <option value="draft">Draft</option>
                 <option value="published">Published</option>
                 <option value="archived">Archived</option>
               </select>
+              <span className={`hidden print:inline-block px-3 py-1 text-sm font-medium rounded-full border ${getStatusColor(service.status)}`}>
+                {service.status}
+              </span>
             </div>
             <p className="mt-1 text-gray-500">
               {format(new Date(service.date), 'EEEE, MMMM d, yyyy • h:mm a')}
               {service.campus && ` • ${service.campus}`}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 print:hidden">
+            <button onClick={handlePrint} className="btn-secondary">
+              Print
+            </button>
             <button onClick={() => setShowTemplateForm(true)} className="btn-secondary">
               Save as Template
             </button>
@@ -232,7 +284,18 @@ export default function ServiceDetailPage() {
               Total Duration: {formatDuration(service.totalDuration)}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 print:hidden">
+            {service.items.length > 0 && (
+              <button
+                onClick={() => {
+                  setBulkMode(!bulkMode)
+                  setSelectedItems(new Set())
+                }}
+                className="btn-secondary"
+              >
+                {bulkMode ? 'Cancel Selection' : 'Select Multiple'}
+              </button>
+            )}
             <button
               onClick={() => setShowSongBrowser(true)}
               className="btn-secondary"
@@ -248,6 +311,36 @@ export default function ServiceDetailPage() {
           </div>
         </div>
 
+        {/* Bulk Actions Bar */}
+        {bulkMode && service.items.length > 0 && (
+          <div className="mb-4 p-4 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-gray-700">
+                {selectedItems.size} item(s) selected
+              </span>
+              <button
+                onClick={selectAllItems}
+                className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+              >
+                Select All
+              </button>
+              <button
+                onClick={deselectAllItems}
+                className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+              >
+                Deselect All
+              </button>
+            </div>
+            <button
+              onClick={bulkDeleteItems}
+              disabled={selectedItems.size === 0}
+              className="btn-danger disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Delete Selected
+            </button>
+          </div>
+        )}
+
         {service.items.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             No items yet. Add your first item to build the service order.
@@ -260,6 +353,9 @@ export default function ServiceDetailPage() {
                 item={item}
                 index={index}
                 serviceId={service.id}
+                bulkMode={bulkMode}
+                isSelected={selectedItems.has(item.id)}
+                onToggleSelect={() => toggleItemSelection(item.id)}
                 onUpdate={fetchService}
                 onMove={async (dragIndex, hoverIndex) => {
                   if (dragIndex === hoverIndex) return
@@ -306,7 +402,7 @@ export default function ServiceDetailPage() {
           <h2 className="text-xl font-semibold text-gray-900">Assignments</h2>
           <button
             onClick={() => setShowAssignmentForm(true)}
-            className="btn-primary"
+            className="btn-primary print:hidden"
           >
             Add Assignment
           </button>
@@ -319,24 +415,12 @@ export default function ServiceDetailPage() {
         ) : (
           <div className="space-y-2">
             {service.assignments.map((assignment) => (
-              <div
+              <AssignmentRow
                 key={assignment.id}
-                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
-              >
-                <div>
-                  <h3 className="font-medium text-gray-900">{assignment.role}</h3>
-                  <p className="text-sm text-gray-500">
-                    {assignment.person.firstName} {assignment.person.lastName}
-                  </p>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  assignment.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                  assignment.status === 'declined' ? 'bg-red-100 text-red-800' :
-                  'bg-yellow-100 text-yellow-800'
-                }`}>
-                  {assignment.status}
-                </span>
-              </div>
+                assignment={assignment}
+                serviceId={service.id}
+                onUpdate={fetchService}
+              />
             ))}
           </div>
         )}
@@ -659,6 +743,9 @@ function DraggableServiceItemRow({
   item,
   index,
   serviceId,
+  bulkMode,
+  isSelected,
+  onToggleSelect,
   onUpdate,
   onMove,
   formatDuration,
@@ -667,6 +754,9 @@ function DraggableServiceItemRow({
   item: ServiceItem
   index: number
   serviceId: string
+  bulkMode: boolean
+  isSelected: boolean
+  onToggleSelect: () => void
   onUpdate: () => void
   onMove: (dragIndex: number, hoverIndex: number) => void
   formatDuration: (seconds: number) => string
@@ -695,6 +785,9 @@ function DraggableServiceItemRow({
       <ServiceItemRow
         item={item}
         serviceId={serviceId}
+        bulkMode={bulkMode}
+        isSelected={isSelected}
+        onToggleSelect={onToggleSelect}
         onUpdate={onUpdate}
         formatDuration={formatDuration}
         getItemIcon={getItemIcon}
@@ -707,12 +800,18 @@ function DraggableServiceItemRow({
 function ServiceItemRow({
   item,
   serviceId,
+  bulkMode,
+  isSelected,
+  onToggleSelect,
   onUpdate,
   formatDuration,
   getItemIcon,
 }: {
   item: ServiceItem
   serviceId: string
+  bulkMode: boolean
+  isSelected: boolean
+  onToggleSelect: () => void
   onUpdate: () => void
   formatDuration: (seconds: number) => string
   getItemIcon: (type: string) => string
@@ -865,10 +964,20 @@ function ServiceItemRow({
   }
 
   return (
-    <div className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 group">
-      <div className="cursor-move text-gray-400 hover:text-gray-600" title="Drag to reorder">
-        ⠿
-      </div>
+    <div className={`flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 group print:border-0 print:p-2 ${isSelected ? 'bg-primary-50 border-primary-400' : ''}`}>
+      {bulkMode && (
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggleSelect}
+          className="w-5 h-5 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+        />
+      )}
+      {!bulkMode && (
+        <div className="cursor-move text-gray-400 hover:text-gray-600 print:hidden" title="Drag to reorder">
+          ⠿
+        </div>
+      )}
       <div className="text-2xl">{getItemIcon(item.type)}</div>
       <div className="flex-1">
         <h3 className="font-medium text-gray-900">{item.title}</h3>
@@ -879,24 +988,124 @@ function ServiceItemRow({
       <div className="text-sm text-gray-500">
         {formatDuration(item.durationSec)}
       </div>
-      <div className="text-xs text-gray-400 uppercase">
+      <div className="text-xs text-gray-400 uppercase print:hidden">
         {item.type}
       </div>
-      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={() => setIsEditing(true)}
-          className="text-primary-600 hover:text-primary-700 text-sm font-medium px-2 py-1"
-          title="Edit"
-        >
-          Edit
-        </button>
-        <button
-          onClick={handleDelete}
+      {!bulkMode && (
+        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity print:hidden">
+          <button
+            onClick={() => setIsEditing(true)}
+            className="text-primary-600 hover:text-primary-700 text-sm font-medium px-2 py-1"
+            title="Edit"
+          >
+            Edit
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={loading}
+            className="text-red-600 hover:text-red-700 text-sm font-medium px-2 py-1"
+            title="Delete"
+          >
+            {loading ? 'Deleting...' : 'Delete'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Assignment Row Component with status updates
+function AssignmentRow({
+  assignment,
+  serviceId,
+  onUpdate,
+}: {
+  assignment: Assignment
+  serviceId: string
+  onUpdate: () => void
+}) {
+  const [loading, setLoading] = useState(false)
+
+  const updateStatus = async (newStatus: 'pending' | 'accepted' | 'declined') => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/services/${serviceId}/assignments/${assignment.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update status')
+      }
+
+      onUpdate()
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to update status')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const deleteAssignment = async () => {
+    if (!confirm('Remove this assignment?')) return
+
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/services/${serviceId}/assignments/${assignment.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete assignment')
+      }
+
+      onUpdate()
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to delete assignment')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'accepted':
+        return 'bg-green-100 text-green-800'
+      case 'declined':
+        return 'bg-red-100 text-red-800'
+      default:
+        return 'bg-yellow-100 text-yellow-800'
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 group">
+      <div className="flex-1">
+        <h3 className="font-medium text-gray-900">{assignment.role}</h3>
+        <p className="text-sm text-gray-500">
+          {assignment.person.firstName} {assignment.person.lastName}
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <select
+          value={assignment.status}
+          onChange={(e) => updateStatus(e.target.value as any)}
           disabled={loading}
-          className="text-red-600 hover:text-red-700 text-sm font-medium px-2 py-1"
-          title="Delete"
+          className={`px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(assignment.status)} disabled:opacity-50`}
         >
-          {loading ? 'Deleting...' : 'Delete'}
+          <option value="pending">Pending</option>
+          <option value="accepted">Accepted</option>
+          <option value="declined">Declined</option>
+        </select>
+        <button
+          onClick={deleteAssignment}
+          disabled={loading}
+          className="opacity-0 group-hover:opacity-100 text-red-600 hover:text-red-700 text-sm font-medium px-2 py-1 print:hidden"
+        >
+          Remove
         </button>
       </div>
     </div>
