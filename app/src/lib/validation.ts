@@ -71,6 +71,20 @@ export const createGroupSchema = z.object({
   cadence: z.string().optional().nullable(),
   location: z.string().optional().nullable(),
   isOpen: z.boolean().default(true),
+  status: z.enum(['active', 'inactive', 'archived']).default('active'),
+  visibility: z.enum(['public', 'private', 'hidden']).default('public'),
+  category: z.enum([
+    'small_group', 'ministry_team', 'class', 'committee', 'prayer_group',
+    'bible_study', 'youth_group', 'kids_group', 'mens_group', 'womens_group',
+    'support_group', 'service_team', 'worship_team', 'other'
+  ]).default('small_group'),
+  capacity: z.number().int().positive().optional().nullable(),
+  photoUrl: z.string().url('Invalid photo URL').optional().nullable(),
+  meetingDay: z.string().optional().nullable(),
+  meetingTime: z.string().optional().nullable(),
+  campus: z.string().optional().nullable(),
+  startDate: z.string().datetime().optional().nullable(),
+  endDate: z.string().datetime().optional().nullable(),
 })
 
 export const updateGroupSchema = createGroupSchema.partial()
@@ -78,12 +92,80 @@ export const updateGroupSchema = createGroupSchema.partial()
 // Group Membership schemas
 export const addGroupMemberSchema = z.object({
   personId: z.string().cuid(),
-  role: z.enum(['leader', 'member']).default('member'),
+  role: z.enum(['leader', 'co_leader', 'member', 'guest']).default('member'),
+  status: z.enum(['active', 'invited', 'requested', 'declined']).default('active'),
+  notes: z.string().optional().nullable(),
+})
+
+export const updateGroupMemberSchema = z.object({
+  role: z.enum(['leader', 'co_leader', 'member', 'guest']).optional(),
+  status: z.enum(['active', 'invited', 'requested', 'declined']).optional(),
+  notes: z.string().optional().nullable(),
 })
 
 // Group Comment schemas
 export const createGroupCommentSchema = z.object({
   content: z.string().min(1, 'Comment cannot be empty'),
+})
+
+// Group Meeting schemas
+export const createGroupMeetingSchema = z.object({
+  groupId: z.string().cuid(),
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().optional().nullable(),
+  startTime: z.string().datetime('Invalid start time'),
+  endTime: z.string().datetime('Invalid end time').optional().nullable(),
+  location: z.string().optional().nullable(),
+  isRecurring: z.boolean().default(false),
+  notes: z.string().optional().nullable(),
+})
+
+export const updateGroupMeetingSchema = createGroupMeetingSchema.partial().omit({ groupId: true })
+
+export const cancelGroupMeetingSchema = z.object({
+  isCancelled: z.boolean(),
+})
+
+// Group Attendance schemas
+export const recordGroupAttendanceSchema = z.object({
+  membershipId: z.string().cuid(),
+  attended: z.boolean(),
+  notes: z.string().optional().nullable(),
+})
+
+export const bulkRecordAttendanceSchema = z.object({
+  attendanceRecords: z.array(z.object({
+    membershipId: z.string().cuid(),
+    attended: z.boolean(),
+    notes: z.string().optional().nullable(),
+  })),
+})
+
+// Group Resource schemas
+export const createGroupResourceSchema = z.object({
+  groupId: z.string().cuid(),
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().optional().nullable(),
+  type: z.enum(['document', 'video', 'audio', 'link', 'curriculum']),
+  url: z.string().url('Invalid URL').optional().nullable(),
+  fileUrl: z.string().url('Invalid file URL').optional().nullable(),
+})
+
+export const updateGroupResourceSchema = createGroupResourceSchema.partial().omit({ groupId: true })
+
+// Group Prayer Request schemas
+export const createGroupPrayerRequestSchema = z.object({
+  groupId: z.string().cuid(),
+  title: z.string().min(1, 'Title is required'),
+  content: z.string().min(1, 'Content is required'),
+  isPrivate: z.boolean().default(false),
+})
+
+export const updateGroupPrayerRequestSchema = z.object({
+  title: z.string().min(1, 'Title is required').optional(),
+  content: z.string().min(1, 'Content is required').optional(),
+  isAnswered: z.boolean().optional(),
+  isPrivate: z.boolean().optional(),
 })
 
 // Organization schemas

@@ -23,9 +23,31 @@ export async function GET(
           include: {
             person: true,
           },
+          orderBy: [
+            { role: 'asc' },  // Leaders first
+            { joinedAt: 'asc' },
+          ],
         },
         comments: {
           orderBy: { createdAt: 'desc' },
+        },
+        meetings: {
+          orderBy: { startTime: 'desc' },
+          take: 10,  // Get latest 10 meetings
+        },
+        resources: {
+          orderBy: { createdAt: 'desc' },
+        },
+        prayerRequests: {
+          orderBy: { createdAt: 'desc' },
+        },
+        _count: {
+          select: {
+            members: true,
+            meetings: true,
+            resources: true,
+            prayerRequests: true,
+          },
         },
       },
     })
