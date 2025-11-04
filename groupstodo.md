@@ -16,11 +16,11 @@
 - **Prayer Requests**: Create, update, mark answered prayer requests
 
 ### 🚧 In Progress
-- Frontend UI for meetings, resources, and prayer requests tabs
-- Group listing with filtering and search
-- Bulk operations (import/export members)
+- Bulk operations (CSV import/export members)
+- Transfer members between groups
+- Email/SMS communication
 
-### 📋 Phase 1 Progress: 41 of 51 items completed (80%)
+### 📋 Phase 1 Progress: 48 of 51 items completed (94%)
 
 ## 🎯 Phase 1: Core MVP Features (CRITICAL)
 
@@ -34,8 +34,8 @@
 - [x] Group visibility (public, private, hidden)
 - [x] Group capacity limits
 - [x] Group photo/image upload
-- [ ] Duplicate group
-- [ ] Print group roster
+- [x] Duplicate group
+- [x] Print group roster
 
 ### Member Management
 - [x] View group members list
@@ -92,7 +92,7 @@
 - [ ] Group type templates
 - [ ] Type-specific fields
 - [ ] Category hierarchy (parent/child categories)
-- [ ] Filter groups by type
+- [x] Filter groups by type
 - [ ] Type-based permissions
 - [ ] Type-specific workflows
 - [ ] Tag system for groups
