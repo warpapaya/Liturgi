@@ -174,17 +174,31 @@ enum WorkflowStepType {
 }
 
 model Organization {
-  id          String   @id @default(cuid())
-  name        String
-  subdomain   String   @unique
-  plan        Plan     @default(trial)
-  planLimits  Json     // {people: 100, groups: 10, servicePlans: 10}
-  trialEndAt  DateTime?
-  logoUrl     String?
-  timezone    String   @default("America/New_York")
-  campus      String?  // Default campus
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  subdomain       String   @unique
+  customDomain    String?  // For white-label
+  plan            Plan     @default(trial)
+  planLimits      Json     // {people: 100, groups: 10, servicePlans: 10}
+  trialEndAt      DateTime?
+  logoUrl         String?
+  timezone        String   @default("America/New_York")
+  dateFormat      String   @default("MM/dd/yyyy")
+  timeFormat      String   @default("12h")
+  locale          String   @default("en-US")
+  campus          String?  // Default campus
+  campuses        Json     @default("[]") // Array of campus objects
+  customFields    Json     @default("{}") // Custom org fields
+  settings        Json     @default("{}") // Additional settings
+  brandingColors  Json?    // Custom colors for white-label
+  emailFromName   String?  // Custom email sender name
+  emailFromAddress String? // Custom email sender address
+  smtpSettings    Json?    // SMTP configuration
+  isActive        Boolean  @default(true)
+  suspendedAt     DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   users              User[]
   sessions           Session[]
@@ -230,6 +244,8 @@ model User {
 
   @@unique([orgId, email])
   @@index([orgId])
+  @@index([email])
+  @@index([accountStatus])
   @@map("users")
 }
 
@@ -258,7 +274,11 @@ model Session {
   orgId         String
   userId        String
   expiresAt     DateTime
+  ipAddress     String?
   ipFingerprint String?
+  userAgent     String?
+  deviceName    String?  // e.g., "Chrome on MacOS"
+  lastAccessedAt DateTime @default(now())
   createdAt     DateTime @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -268,6 +288,57 @@ model Session {
   @@index([userId])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+model PasswordReset {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("password_resets")
+}
+
+model EmailVerification {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("email_verifications")
+}
+
+model LoginHistory {
+  id         String   @id @default(cuid())
+  userId     String
+  ipAddress  String?
+  userAgent  String?
+  deviceName String?
+  success    Boolean  @default(true)
+  failReason String?  // "invalid_credentials", "2fa_failed", "account_locked", etc.
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([ipAddress])
+  @@map("login_history")
 }
 
 model Person {
