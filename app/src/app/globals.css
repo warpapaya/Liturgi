@@ -4,65 +4,238 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Brand Colors - Liturgi Design System */
+    --primary: 218 55% 35%; /* Sanctuary Blue #2A4B8D */
+    --primary-foreground: 0 0% 100%;
+    --sidebar-primary: 218 55% 35%;
+    --sidebar-primary-foreground: 0 0% 100%;
+
+    /* Accent Colors */
+    --accent: 43 40% 53%; /* Liturgical Gold #C9A34A */
+    --accent-foreground: 0 0% 100%;
+
+    /* Success Color */
+    --success: 148 30% 55%; /* Sage Green #6DA67A */
+    --success-foreground: 0 0% 100%;
+
+    /* Destructive/Error Color */
+    --destructive: 0 56% 55%; /* Rosary Red #C85151 */
+    --destructive-foreground: 0 0% 100%;
+
+    /* Background & Foreground */
+    --background: 0 0% 100%; /* White */
+    --foreground: 210 10% 12%; /* Charcoal Ink #1D1D1F */
+
+    /* Card */
+    --card: 0 0% 100%;
+    --card-foreground: 210 10% 12%;
+
+    /* Popover */
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 10% 12%;
+
+    /* Secondary */
+    --secondary: 220 13% 91%; /* Ash Grey */
+    --secondary-foreground: 210 10% 12%;
+
+    /* Muted */
+    --muted: 220 13% 91%; /* Ash Grey #E5E7EB */
+    --muted-foreground: 210 10% 40%;
+
+    /* Border & Input */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 218 55% 35%;
+
+    /* Charts */
+    --chart-1: 218 55% 60%;
+    --chart-2: 218 55% 50%;
+    --chart-3: 218 55% 40%;
+    --chart-4: 218 55% 35%;
+    --chart-5: 218 55% 25%;
+
+    /* Sidebar */
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 210 10% 12%;
+    --sidebar-accent: 220 13% 91%;
+    --sidebar-accent-foreground: 210 10% 12%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 218 55% 35%;
+
+    /* Border Radius */
+    --radius: 0.375rem; /* 6px - liturgi default */
+  }
+
+  /* Dark Mode */
+  .dark {
+    --primary: 218 55% 45%;
+    --primary-foreground: 0 0% 100%;
+    --sidebar-primary: 218 55% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+
+    --background: 210 15% 8%;
+    --foreground: 0 0% 85%;
+
+    --card: 210 15% 12%;
+    --card-foreground: 0 0% 85%;
+
+    --popover: 210 15% 12%;
+    --popover-foreground: 0 0% 85%;
+
+    --secondary: 210 15% 15%;
+    --secondary-foreground: 0 0% 70%;
+
+    --muted: 210 15% 18%;
+    --muted-foreground: 0 0% 65%;
+
+    --accent: 43 40% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 56% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 15% 20%;
+    --input: 210 15% 20%;
+    --ring: 218 55% 45%;
+
+    --chart-1: 218 55% 50%;
+    --chart-2: 218 55% 40%;
+    --chart-3: 218 55% 35%;
+    --chart-4: 218 55% 30%;
+    --chart-5: 218 55% 25%;
+
+    --sidebar: 210 15% 12%;
+    --sidebar-foreground: 0 0% 85%;
+    --sidebar-accent: 210 15% 18%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 210 15% 20%;
+    --sidebar-ring: 218 55% 45%;
+  }
+
+  * {
+    @apply border-border;
   }
 
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-background text-foreground;
   }
+
+  /* Font families - using CSS variables from Next.js fonts */
 }
 
 @layer components {
+  /* Button Base */
   .btn {
-    @apply px-4 py-2 rounded-liturgi font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply px-4 py-2 rounded-liturgi font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
+  /* Button Variants */
   .btn-primary {
-    @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+    @apply btn bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-primary;
   }
 
   .btn-secondary {
-    @apply btn bg-ash text-charcoal hover:bg-gray-300 focus:ring-primary-500;
+    @apply btn bg-secondary text-secondary-foreground hover:bg-secondary/80 focus:ring-primary;
   }
 
   .btn-success {
-    @apply btn bg-sage-500 text-white hover:bg-sage-600 focus:ring-sage-500;
+    @apply btn bg-success text-success-foreground hover:bg-success/90 focus:ring-success;
   }
 
   .btn-danger {
-    @apply btn bg-rosary-600 text-white hover:bg-rosary-700 focus:ring-rosary-500;
+    @apply btn bg-destructive text-destructive-foreground hover:bg-destructive/90 focus:ring-destructive;
   }
 
+  .btn-outline {
+    @apply btn border-2 border-input bg-background hover:bg-accent hover:text-accent-foreground focus:ring-primary;
+  }
+
+  .btn-ghost {
+    @apply btn hover:bg-accent hover:text-accent-foreground focus:ring-primary;
+  }
+
+  /* Form Elements */
   .input {
-    @apply w-full px-3 py-2 border border-ash rounded-liturgi focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-body;
+    @apply w-full px-3 py-2 border border-input bg-background text-foreground rounded-liturgi placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50 transition-colors;
   }
 
   .label {
-    @apply block text-sm font-semibold text-gray-700 mb-1;
+    @apply block text-sm font-semibold text-foreground mb-1.5;
   }
 
+  .textarea {
+    @apply w-full px-3 py-2 border border-input bg-background text-foreground rounded-liturgi placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50 resize-y min-h-[80px] transition-colors;
+  }
+
+  /* Card */
   .card {
-    @apply bg-white rounded-liturgi-lg shadow-sm p-6;
+    @apply bg-card text-card-foreground rounded-liturgi-lg shadow-sm border border-border p-6;
   }
 
+  .card-header {
+    @apply mb-4;
+  }
+
+  .card-title {
+    @apply text-xl font-semibold text-foreground;
+  }
+
+  .card-description {
+    @apply text-sm text-muted-foreground mt-1;
+  }
+
+  /* Badge */
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-liturgi text-xs font-medium;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-liturgi text-xs font-medium transition-colors;
+  }
+
+  .badge-default {
+    @apply badge bg-primary text-primary-foreground;
+  }
+
+  .badge-secondary {
+    @apply badge bg-secondary text-secondary-foreground;
   }
 
   .badge-success {
-    @apply badge bg-sage-100 text-sage-800;
+    @apply badge bg-success text-success-foreground;
   }
 
   .badge-warning {
-    @apply badge bg-gold-100 text-gold-800;
+    @apply badge bg-accent text-accent-foreground;
   }
 
   .badge-error {
-    @apply badge bg-rosary-100 text-rosary-800;
+    @apply badge bg-destructive text-destructive-foreground;
   }
 
-  .badge-info {
-    @apply badge bg-primary-100 text-primary-800;
+  .badge-outline {
+    @apply badge border border-input bg-background text-foreground;
+  }
+
+  /* Typography */
+  .text-heading-1 {
+    @apply font-serif text-5xl font-bold leading-tight tracking-tight;
+  }
+
+  .text-heading-2 {
+    @apply font-serif text-4xl font-bold leading-tight tracking-tight;
+  }
+
+  .text-heading-3 {
+    @apply font-serif text-3xl font-semibold leading-tight;
+  }
+
+  .text-heading-4 {
+    @apply text-2xl font-semibold leading-tight;
+  }
+
+  .text-heading-5 {
+    @apply text-xl font-semibold leading-tight;
+  }
+
+  /* Container Utility */
+  .container {
+    @apply mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl;
   }
 }
