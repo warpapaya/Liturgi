@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { DndProvider, useDrag, useDrop } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
+import SongBrowserModal from '@/components/SongBrowserModal'
 
 interface ServiceItem {
   id: string
@@ -48,6 +49,7 @@ export default function ServiceDetailPage() {
   const [showItemForm, setShowItemForm] = useState(false)
   const [showAssignmentForm, setShowAssignmentForm] = useState(false)
   const [showTemplateForm, setShowTemplateForm] = useState(false)
+  const [showSongBrowser, setShowSongBrowser] = useState(false)
 
   useEffect(() => {
     fetchService()
@@ -230,12 +232,20 @@ export default function ServiceDetailPage() {
               Total Duration: {formatDuration(service.totalDuration)}
             </p>
           </div>
-          <button
-            onClick={() => setShowItemForm(true)}
-            className="btn-primary"
-          >
-            Add Item
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowSongBrowser(true)}
+              className="btn-secondary"
+            >
+              Add from Library
+            </button>
+            <button
+              onClick={() => setShowItemForm(true)}
+              className="btn-primary"
+            >
+              Add Item
+            </button>
+          </div>
         </div>
 
         {service.items.length === 0 ? (
@@ -354,6 +364,40 @@ export default function ServiceDetailPage() {
             alert('Template created successfully!')
           }}
           onCancel={() => setShowTemplateForm(false)}
+        />
+      )}
+
+      {/* Song Browser Modal */}
+      {showSongBrowser && (
+        <SongBrowserModal
+          onSelect={async (song, arrangement) => {
+            try {
+              const res = await fetch(`/api/services/${service.id}/items`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'song',
+                  title: song.title,
+                  songId: song.id,
+                  key: arrangement?.key || null,
+                  durationSec: 300, // Default 5 minutes
+                  position: service.items.length,
+                  notes: arrangement ? `Arrangement: ${arrangement.name}` : null,
+                }),
+              })
+
+              if (!res.ok) {
+                const data = await res.json()
+                throw new Error(data.error || 'Failed to add song')
+              }
+
+              setShowSongBrowser(false)
+              fetchService()
+            } catch (err) {
+              alert(err instanceof Error ? err.message : 'Failed to add song')
+            }
+          }}
+          onCancel={() => setShowSongBrowser(false)}
         />
       )}
     </div>
